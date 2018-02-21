@@ -26,6 +26,7 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "pixelCol", PixelCol);
   Nan::SetPrototypeMethod(ctor, "empty", Empty);
   Nan::SetPrototypeMethod(ctor, "get", Get);
+  Nan::SetPrototypeMethod(ctor, "getPixel", GetPixel);
   Nan::SetPrototypeMethod(ctor, "set", Set);
   Nan::SetPrototypeMethod(ctor, "put", Put);
   Nan::SetPrototypeMethod(ctor, "brightness", Brightness);
@@ -69,7 +70,7 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "dct", Dct);
   Nan::SetPrototypeMethod(ctor, "idct", Idct);
   Nan::SetPrototypeMethod(ctor, "addWeighted", AddWeighted);
-  Nan::SetPrototypeMethod(ctor, "add", Add);  
+  Nan::SetPrototypeMethod(ctor, "add", Add);
   Nan::SetPrototypeMethod(ctor, "bitwiseXor", BitwiseXor);
   Nan::SetPrototypeMethod(ctor, "bitwiseNot", BitwiseNot);
   Nan::SetPrototypeMethod(ctor, "bitwiseAnd", BitwiseAnd);
@@ -82,7 +83,9 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "drawContour", DrawContour);
   Nan::SetPrototypeMethod(ctor, "drawAllContours", DrawAllContours);
   Nan::SetPrototypeMethod(ctor, "goodFeaturesToTrack", GoodFeaturesToTrack);
+  #ifdef HAVE_OPENCV_VIDEO
   Nan::SetPrototypeMethod(ctor, "calcOpticalFlowPyrLK", CalcOpticalFlowPyrLK);
+  #endif
   Nan::SetPrototypeMethod(ctor, "houghLinesP", HoughLinesP);
   Nan::SetPrototypeMethod(ctor, "houghCircles", HoughCircles);
   Nan::SetPrototypeMethod(ctor, "inRange", inRange);
@@ -114,8 +117,13 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "mean", Mean);
   Nan::SetPrototypeMethod(ctor, "shift", Shift);
   Nan::SetPrototypeMethod(ctor, "reshape", Reshape);
+// leave this out - can't see a way it could be useful to us, as release() always completely forgets the data
+//  Nan::SetPrototypeMethod(ctor, "addref", Addref);
   Nan::SetPrototypeMethod(ctor, "release", Release);
+  Nan::SetPrototypeMethod(ctor, "getrefCount", GetrefCount);
   Nan::SetPrototypeMethod(ctor, "subtract", Subtract);
+  Nan::SetPrototypeMethod(ctor, "compare", Compare);
+  Nan::SetPrototypeMethod(ctor, "mul", Mul);
 
   target->Set(Nan::New("Matrix").ToLocalChecked(), ctor->GetFunction());
 };
@@ -272,6 +280,35 @@ NAN_METHOD(Matrix::Get) {
 
   double val = Matrix::DblGet(self->mat, i, j);
   info.GetReturnValue().Set(Nan::New<Number>(val));
+}
+
+NAN_METHOD(Matrix::GetPixel) {
+  SETUP_FUNCTION(Matrix)
+
+  int y = info[0]->IntegerValue();
+  int x = info[1]->IntegerValue();
+
+  if (self->mat.channels() == 4) {
+    v8::Local < v8::Array > arr = Nan::New<Array>(4);
+    cv::Vec4b pixel = self->mat.at<cv::Vec4b>(y, x);
+    arr->Set(0, Nan::New<Number>((double) pixel.val[0]));
+    arr->Set(1, Nan::New<Number>((double) pixel.val[1]));
+    arr->Set(2, Nan::New<Number>((double) pixel.val[2]));
+    arr->Set(3, Nan::New<Number>((double) pixel.val[3]));
+    info.GetReturnValue().Set(arr);
+  } else if (self->mat.channels() == 3) {
+    v8::Local < v8::Array > arr = Nan::New<Array>(3);
+    cv::Vec3b pixel = self->mat.at<cv::Vec3b>(y, x);
+    arr->Set(0, Nan::New<Number>((double) pixel.val[0]));
+    arr->Set(1, Nan::New<Number>((double) pixel.val[1]));
+    arr->Set(2, Nan::New<Number>((double) pixel.val[2]));
+    info.GetReturnValue().Set(arr);
+  } else if(self->mat.channels() == 1) {
+    int pixel = (int)self->mat.at<unsigned char>(y, x);
+    info.GetReturnValue().Set(pixel);
+  } else {
+    Nan::ThrowTypeError("Only 4, 3 and 1 channel matrix are supported");
+  }
 }
 
 NAN_METHOD(Matrix::Set) {
@@ -567,7 +604,17 @@ NAN_METHOD(Matrix::PixelRow) {
   int y = info[0]->IntegerValue();
   v8::Local < v8::Array > arr;
 
-  if (self->mat.channels() == 3) {
+  if (self->mat.channels() == 4) {
+    arr = Nan::New<Array>(width * 4);
+    for (int x = 0; x < width; x++) {
+      cv::Vec4b pixel = self->mat.at<cv::Vec4b>(y, x);
+      int offset = x * 4;
+      arr->Set(offset, Nan::New<Number>((double) pixel.val[0]));
+      arr->Set(offset + 1, Nan::New<Number>((double) pixel.val[1]));
+      arr->Set(offset + 2, Nan::New<Number>((double) pixel.val[2]));
+      arr->Set(offset + 3, Nan::New<Number>((double) pixel.val[3]));
+    }
+  } else if(self->mat.channels() == 3){
     arr = Nan::New<Array>(width * 3);
     for (int x = 0; x < width; x++) {
       cv::Vec3b pixel = self->mat.at<cv::Vec3b>(y, x);
@@ -576,12 +623,14 @@ NAN_METHOD(Matrix::PixelRow) {
       arr->Set(offset + 1, Nan::New<Number>((double) pixel.val[1]));
       arr->Set(offset + 2, Nan::New<Number>((double) pixel.val[2]));
     }
-  } else {
+  } else if(self->mat.channels() == 1){
     arr = Nan::New<Array>(width);
     for (int x = 0; x < width; x++) {
       int pixel = (int)self->mat.at<unsigned char>(y, x);
       arr->Set(x, Nan::New<Number>(pixel));
     }
+  } else {
+      Nan::ThrowTypeError("Only 4, 3 and 1 channel matrix are supported");
   }
 
   info.GetReturnValue().Set(arr);
@@ -607,8 +656,18 @@ NAN_METHOD(Matrix::PixelCol) {
   int height = self->mat.size().height;
   int x = info[0]->IntegerValue();
   v8::Local < v8::Array > arr;
-  
-  if (self->mat.channels() == 3) {
+
+  if (self->mat.channels() == 4) {
+    arr = Nan::New<Array>(height * 4);
+    for (int y = 0; y < height; y++) {
+      cv::Vec4b pixel = self->mat.at<cv::Vec4b>(y, x);
+      int offset = y * 4;
+      arr->Set(offset, Nan::New<Number>((double) pixel.val[0]));
+      arr->Set(offset + 1, Nan::New<Number>((double) pixel.val[1]));
+      arr->Set(offset + 2, Nan::New<Number>((double) pixel.val[2]));
+      arr->Set(offset + 3, Nan::New<Number>((double) pixel.val[3]));
+    }
+  } else if (self->mat.channels() == 3) {
     arr = Nan::New<Array>(height * 3);
     for (int y = 0; y < height; y++) {
       cv::Vec3b pixel = self->mat.at<cv::Vec3b>(y, x);
@@ -617,13 +676,16 @@ NAN_METHOD(Matrix::PixelCol) {
       arr->Set(offset + 1, Nan::New<Number>((double) pixel.val[1]));
       arr->Set(offset + 2, Nan::New<Number>((double) pixel.val[2]));
     }
-  } else {
+  } else if(self->mat.channels() == 1) {
     arr = Nan::New<Array>(height);
     for (int y = 0; y < height; y++) {
       int pixel = (int)self->mat.at<unsigned char>(y, x);
       arr->Set(y, Nan::New<Number>(pixel));
     }
+  } else {
+    Nan::ThrowTypeError("Only 4, 3 and 1 channel matrix are supported");
   }
+
   info.GetReturnValue().Set(arr);
 }
 
@@ -710,21 +772,22 @@ NAN_METHOD(Matrix::ToBuffer) {
 
 class AsyncToBufferWorker: public Nan::AsyncWorker {
 public:
-  AsyncToBufferWorker(Nan::Callback *callback, Matrix* matrix, std::string ext,
+  AsyncToBufferWorker(Nan::Callback *callback, cv::Mat mat, std::string ext,
     std::vector<int> params) :
       Nan::AsyncWorker(callback),
-      matrix(matrix),
+      mat(mat), // dulipcate mat, adding ref, but not copying data
       ext(ext),
       params(params) {
   }
 
   ~AsyncToBufferWorker() {
+      // mat is released, decrementing refcount
   }
 
   void Execute() {
     std::vector<uchar> vec(0);
     // std::vector<int> params(0);//CV_IMWRITE_JPEG_QUALITY 90
-    cv::imencode(ext, this->matrix->mat, vec, this->params);
+    cv::imencode(ext, this->mat, vec, this->params);
     res = vec;
   }
 
@@ -754,7 +817,7 @@ public:
   }
 
 private:
-  Matrix* matrix;
+  cv::Mat mat;
   std::string ext;
   std::vector<int> params;
   std::vector<uchar> res;
@@ -794,7 +857,7 @@ NAN_METHOD(Matrix::ToBufferAsync) {
   }
 
   Nan::Callback *callback = new Nan::Callback(cb.As<Function>());
-  Nan::AsyncQueueWorker(new AsyncToBufferWorker(callback, self, ext, params));
+  Nan::AsyncQueueWorker(new AsyncToBufferWorker(callback, self->mat, ext, params));
 
   return;
 }
@@ -987,9 +1050,9 @@ NAN_METHOD(Matrix::Save) {
 // https://github.com/rvagg/nan/blob/c579ae858ae3208d7e702e8400042ba9d48fa64b/examples/async_pi_estimate/async.cc
 class AsyncSaveWorker: public Nan::AsyncWorker {
 public:
-  AsyncSaveWorker(Nan::Callback *callback, Matrix* matrix, char* filename) :
+  AsyncSaveWorker(Nan::Callback *callback, cv::Mat mat, char* filename) :
       Nan::AsyncWorker(callback),
-      matrix(matrix),
+      mat(mat),
       filename(filename) {
   }
 
@@ -1001,7 +1064,7 @@ public:
   // here, so everything we need for input and output
   // should go on `this`.
   void Execute() {
-    res = cv::imwrite(this->filename, this->matrix->mat);
+    res = cv::imwrite(this->filename, this->mat);
   }
 
   // Executed when the async work is complete
@@ -1023,7 +1086,7 @@ public:
   }
 
 private:
-  Matrix* matrix;
+  cv::Mat mat;
   std::string filename;
   int res;
 };
@@ -1040,7 +1103,7 @@ NAN_METHOD(Matrix::SaveAsync) {
   REQ_FUN_ARG(1, cb);
 
   Nan::Callback *callback = new Nan::Callback(cb.As<Function>());
-  Nan::AsyncQueueWorker(new AsyncSaveWorker(callback, self, *filename));
+  Nan::AsyncQueueWorker(new AsyncSaveWorker(callback, self->mat, *filename));
 
   return;
 }
@@ -1620,14 +1683,21 @@ NAN_METHOD(Matrix::GoodFeaturesToTrack) {
   int maxCorners = info.Length() >= 1 ? info[0]->IntegerValue() : 500;
   double qualityLevel = info.Length() >= 2 ? (double) info[1]->NumberValue() : 0.01;
   double minDistance = info.Length() >= 3 ? (double) info[2]->NumberValue() : 10;
+  int blockSize = info.Length() >= 4 ? info[3]->IntegerValue() : 3;
+  bool useHarrisDetector = info.Length() >= 5 ? info[4]->BooleanValue() : false;
+  double k = info.Length() >= 6 ? (double) info[5]->NumberValue() : 0.04;
 
   std::vector<cv::Point2f> corners;
   cv::Mat gray;
 
-  cvtColor(self->mat, gray, CV_BGR2GRAY);
-  equalizeHist(gray, gray);
+   if (self->mat.channels() == 1) {
+     gray = self->mat;
+   } else {
+     cvtColor(self->mat, gray, CV_BGR2GRAY);
+     equalizeHist(gray, gray);
+   }
 
-  cv::goodFeaturesToTrack(gray, corners, maxCorners, qualityLevel, minDistance);
+  cv::goodFeaturesToTrack(gray, corners, maxCorners, qualityLevel, minDistance, cv::noArray(), blockSize, useHarrisDetector, k);
   v8::Local<v8::Array> arr = Nan::New<Array>(corners.size());
 
   for (unsigned int i=0; i<corners.size(); i++) {
@@ -1640,6 +1710,7 @@ NAN_METHOD(Matrix::GoodFeaturesToTrack) {
   info.GetReturnValue().Set(arr);
 }
 
+#ifdef HAVE_OPENCV_VIDEO
 NAN_METHOD(Matrix::CalcOpticalFlowPyrLK) {
   Nan::HandleScope scope;
 
@@ -1716,6 +1787,7 @@ NAN_METHOD(Matrix::CalcOpticalFlowPyrLK) {
 
   info.GetReturnValue().Set(data);
 }
+#endif
 
 NAN_METHOD(Matrix::HoughLinesP) {
   Nan::HandleScope scope;
@@ -1828,27 +1900,170 @@ cv::Rect* setRect(Local<Object> objRect, cv::Rect &result) {
   return &result;
 }
 
+
+class ResizeASyncWorker: public Nan::AsyncWorker {
+public:
+  ResizeASyncWorker(Nan::Callback *callback, cv::Mat image, cv::Size size, double fx, double fy, int interpolation) :
+      Nan::AsyncWorker(callback),
+      image(image), // here, the cv::Mat is duplicated, adding to refcount without data copy
+      dest(NULL),
+      size(size),
+      fx(fx),
+      fy(fy),
+      interpolation(interpolation),
+      success(0) {
+  }
+    
+  ~ResizeASyncWorker() {
+      // don't leave this if it was allocated
+      // could happen if NaN does not call HandleSuccess?
+      delete dest;
+      dest = NULL;
+      // cv::Mat image will be deleted, which will reduce refcount
+  }
+
+  void Execute() {
+    try {
+        dest = new Matrix();
+        cv::resize(image, dest->mat, size, fx, fy, interpolation);
+        success = 1;
+    } catch(...){
+        success = 0;
+    }
+  }
+
+  void HandleOKCallback() {
+    Nan::HandleScope scope;
+    
+    if (success){
+        try{
+            Local<Object> im_to_return= Nan::NewInstance(Nan::GetFunction(Nan::New(Matrix::constructor)).ToLocalChecked()).ToLocalChecked();
+            Matrix *img = Nan::ObjectWrap::Unwrap<Matrix>(im_to_return);
+            img->mat = dest->mat;
+            delete dest;
+            dest = NULL;
+
+            Local<Value> argv[] = {
+              Nan::Null(), // err
+              im_to_return //result
+            };
+
+            Nan::TryCatch try_catch;
+            callback->Call(2, argv);
+            if (try_catch.HasCaught()) {
+              Nan::FatalException(try_catch);
+            }
+        } catch (...){
+            delete dest;
+            dest = NULL;
+            Local<Value> argv[] = {
+              Nan::New("C++ exception wrapping response").ToLocalChecked(), // err
+              Nan::Null() // result
+            };
+
+            Nan::TryCatch try_catch;
+            callback->Call(2, argv);
+            if (try_catch.HasCaught()) {
+              Nan::FatalException(try_catch);
+            }
+        }
+    } else {
+        delete dest;
+        dest = NULL;
+        
+        Local<Value> argv[] = {
+          Nan::New("C++ exception").ToLocalChecked(), // err
+          Nan::Null() //result
+        };
+
+        Nan::TryCatch try_catch;
+        callback->Call(2, argv);
+        if (try_catch.HasCaught()) {
+          Nan::FatalException(try_catch);
+        }
+    }
+  }
+
+private:
+  cv::Mat image;
+  Matrix *dest;
+  cv::Size size;
+  double fx;
+  double fy;
+  int interpolation;
+  int success;
+
+};
+
+
 NAN_METHOD(Matrix::Resize) {
-  Nan::HandleScope scope;
+  SETUP_FUNCTION(Matrix)
+
+  if (info.Length() < 2) {
+    return Nan::ThrowError("Matrix.resize requires at least 2 argument2");
+  }
+
+  //im.resize( width, height );
+  //im.resize( width, height, fx, fy );
+  //im.resize( width, height, interpolation );
+  //im.resize( width, height, fx, fy, interpolation );
+  // if fn is added on the end, makes it Async
+  
+  int numargs = info.Length();
+  int isAsync = 0;
+  
+  if (info[numargs-1]->IsFunction()){
+      isAsync = 1;
+  }
+
+  if (info.Length() < 2+isAsync) {
+    return Nan::ThrowError("Matrix.resize requires at least x and y size argument2");
+  }
 
   int x = info[0]->Uint32Value();
   int y = info[1]->Uint32Value();
-  /*
-   CV_INTER_NN        =0,
-   CV_INTER_LINEAR    =1,
-   CV_INTER_CUBIC     =2,
-   CV_INTER_AREA      =3,
-   CV_INTER_LANCZOS4  =4
-   */
-  int interpolation = (info.Length() < 3) ? (int)cv::INTER_LINEAR : info[2]->Uint32Value();
 
-  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
-  cv::Mat res = cv::Mat(x, y, CV_32FC3);
-  cv::resize(self->mat, res, cv::Size(x, y), 0, 0, interpolation);
-  ~self->mat;
-  self->mat = res;
+  cv::Size size(x, y);
+  
+  if (size.area() == 0) {
+    return Nan::ThrowError("Area of size must be > 0");
+  }
 
-  return;
+  double fx = 0;
+  double fy = 0;
+  int interpolation = cv::INTER_LINEAR;
+
+  // if 4 or more args, then expect fx, fy next
+  if (numargs >= 4+isAsync) {
+    DOUBLE_FROM_ARGS(fx, 2)
+    DOUBLE_FROM_ARGS(fy, 3)
+    if (numargs == 5+isAsync) {
+      INT_FROM_ARGS(interpolation, 5)
+    }
+  } else {
+    // if 3 args after possible function, expect interpolation
+    if (numargs == 3+isAsync) {
+      INT_FROM_ARGS(interpolation, 3)
+    }
+  }
+  
+  // if async
+  if (isAsync){
+    REQ_FUN_ARG(numargs-1, cb);
+    Nan::Callback *callback = new Nan::Callback(cb.As<Function>());
+    Nan::AsyncQueueWorker(new ResizeASyncWorker(callback, self->mat, size, fx, fy, interpolation));
+    info.GetReturnValue().Set(Nan::Null());
+  } else {
+    try{
+        Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+        cv::Mat res = cv::Mat(x, y, CV_32FC3);
+        cv::resize(self->mat, res, cv::Size(x, y), 0, 0, interpolation);
+        ~self->mat;
+        self->mat = res;
+    } catch (...){
+        return Nan::ThrowError("c++ Exception processing resize");
+    }
+  }
 }
 
 NAN_METHOD(Matrix::Rotate) {
@@ -2822,6 +3037,42 @@ NAN_METHOD(Matrix::Release) {
   return;
 }
 
+// leave this out - can't see a way it could be useful to us, as release() always completely forgets the data
+//NAN_METHOD(Matrix::Addref) {
+//  Nan::HandleScope scope;
+//
+//  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+//  self->mat.addref();
+//
+//  return;
+//}
+
+
+NAN_METHOD(Matrix::GetrefCount) {
+  Nan::HandleScope scope;
+  Matrix *self = Nan::ObjectWrap::Unwrap<Matrix>(info.This());
+
+  int refcount = -1;
+  
+#if CV_MAJOR_VERSION >= 3
+    if (self->mat.u){
+        refcount = self->mat.u->refcount;
+    } else {
+        refcount = -1; // indicates no reference ptr
+    }
+#else
+    if (self->mat.refcount){
+        refcount = *(self->mat.refcount);
+    } else {
+        refcount = -1; // indicates no reference ptr
+    }
+#endif    
+
+  info.GetReturnValue().Set(Nan::New<Number>(refcount));
+  return;
+}
+
+
 NAN_METHOD(Matrix::Subtract) {
   SETUP_FUNCTION(Matrix)
 
@@ -2833,5 +3084,50 @@ NAN_METHOD(Matrix::Subtract) {
 
   self->mat -= other->mat;
 
+  return;
+}
+
+NAN_METHOD(Matrix::Compare) {
+  SETUP_FUNCTION(Matrix)
+
+  if (info.Length() < 2) {
+    Nan::ThrowTypeError("Invalid number of arguments");
+  }
+  Matrix *other = Nan::ObjectWrap::Unwrap<Matrix>(info[0]->ToObject());
+
+  int cmpop = info[1]->IntegerValue();
+
+  int width = self->mat.size().width;
+  int height = self->mat.size().height;
+
+  cv::Mat res = cv::Mat(width, height, CV_8UC1);
+
+  cv::compare(self->mat, other->mat, res, cmpop);
+  Local<Object> out = Nan::NewInstance(Nan::GetFunction(Nan::New(Matrix::constructor)).ToLocalChecked()).ToLocalChecked();
+  Matrix *m_out = Nan::ObjectWrap::Unwrap<Matrix>(out);
+  m_out->mat = res;
+
+  info.GetReturnValue().Set(out);
+  return;
+}
+NAN_METHOD(Matrix::Mul) {
+  SETUP_FUNCTION(Matrix)
+
+  if (info.Length() < 1) {
+    Nan::ThrowTypeError("Invalid number of arguments");
+  }
+
+  Matrix *other = Nan::ObjectWrap::Unwrap<Matrix>(info[0]->ToObject());
+
+  double scale = 1;
+  if (info.Length() > 1) scale = info[1]->NumberValue();
+
+  cv::Mat res = self->mat.mul(other->mat, scale);
+
+  Local<Object> out = Nan::NewInstance(Nan::GetFunction(Nan::New(Matrix::constructor)).ToLocalChecked()).ToLocalChecked();
+  Matrix *m_out = Nan::ObjectWrap::Unwrap<Matrix>(out);
+  m_out->mat = res;
+
+  info.GetReturnValue().Set(out);
   return;
 }

@@ -20,6 +20,7 @@ public:
   JSFUNC(Eye)  // factory
 
   JSFUNC(Get)  // at
+  JSFUNC(GetPixel)
   JSFUNC(Set)
   JSFUNC(Put)
 
@@ -89,7 +90,9 @@ public:
 
   // Feature Detection
   JSFUNC(GoodFeaturesToTrack)
+  #ifdef HAVE_OPENCV_VIDEO
   JSFUNC(CalcOpticalFlowPyrLK)
+  #endif
   JSFUNC(HoughLinesP)
   JSFUNC(HoughCircles)
 
@@ -131,9 +134,15 @@ public:
   JSFUNC(Shift)
   JSFUNC(Reshape)
 
+          
+// leave this out - can't see a way it could be useful to us, as release() always completely forgets the data
+//JSFUNC(Addref)
   JSFUNC(Release)
+  JSFUNC(GetrefCount)
 
   JSFUNC(Subtract)
+  JSFUNC(Compare)
+  JSFUNC(Mul)
   /*
    static Handle<Value> Val(const Arguments& info);
    static Handle<Value> RowRange(const Arguments& info);
