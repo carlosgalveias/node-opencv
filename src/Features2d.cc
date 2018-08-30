@@ -48,7 +48,12 @@ public:
     extractor->compute(image1, keypoints1, descriptors1);
     extractor->compute(image2, keypoints2, descriptors2);
 
-    matcher->match(descriptors1, descriptors2, matches);
+
+    if (descriptors1.type() == descriptors2.type() && descriptors1.cols == descriptors2.cols) { // NEW
+      matcher->match(descriptors1, descriptors2, matches);
+    } else {
+      dissimilarity = std::numeric_limits<double>::quiet_NaN(); // NEW
+    }
 
     double max_dist = 0;
     double min_dist = 100;
@@ -88,7 +93,10 @@ public:
     Local<Value> argv[2];
 
     argv[0] = Nan::Null();
-    argv[1] = Nan::New<Number>(dissimilarity);
+    // argv[1] = Nan::New<Number>(dissimilarity); NEW
+
+    if (dissimilarity != dissimilarity) argv[1] = Nan::Null();
+    else argv[1] = Nan::New<Number>(dissimilarity);
 
     callback->Call(2, argv);
   }
