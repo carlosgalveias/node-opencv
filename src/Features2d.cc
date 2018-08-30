@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <limits>
 
+#ifdef HAVE_OPENCV_FEATURES2D
+
 void Features::Init(Local<Object> target) {
   Nan::HandleScope scope;
 
