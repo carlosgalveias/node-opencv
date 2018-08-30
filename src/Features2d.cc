@@ -114,5 +114,5 @@ NAN_METHOD(Features::Similarity) {
     return;
 }
 
-#
-endif
+#endif
+#endif
