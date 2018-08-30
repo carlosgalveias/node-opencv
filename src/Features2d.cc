@@ -5,6 +5,7 @@
 #include "Matrix.h"
 #include <nan.h>
 #include <stdio.h>
+#include <limits>
 
 #ifdef HAVE_OPENCV_FEATURES2D
 
@@ -48,26 +49,20 @@ public:
     extractor->compute(image1, keypoints1, descriptors1);
     extractor->compute(image2, keypoints2, descriptors2);
 
-
-    if (descriptors1.type() == descriptors2.type() && descriptors1.cols == descriptors2.cols) { // NEW
+    if (descriptors1.type() == descriptors2.type() && descriptors1.cols == descriptors2.cols) {
       matcher->match(descriptors1, descriptors2, matches);
-    } else {
-      dissimilarity = std::numeric_limits<double>::quiet_NaN(); // NEW
-    }
-
-    double max_dist = 0;
-    double min_dist = 100;
-
-    //-- Quick calculation of max and min distances between keypoints
-    for (int i = 0; i < descriptors1.rows; i++) {
-      double dist = matches[i].distance;
-      if (dist < min_dist) {
-        min_dist = dist;
+       double max_dist = 0;
+      double min_dist = 100;
+       //-- Quick calculation of max and min distances between keypoints
+      for (int i = 0; i < descriptors1.rows; i++) {
+        double dist = matches[i].distance;
+        if (dist < min_dist) {
+          min_dist = dist;
+        }
+        if (dist > max_dist) {
+          max_dist = dist;
+        }
       }
-      if (dist > max_dist) {
-        max_dist = dist;
-      }
-    }
 
     //-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist,
     //-- or a small arbitary value ( 0.02 ) in the event that min_dist is very
@@ -85,7 +80,9 @@ public:
     }
 
     dissimilarity = (double) good_matches_sum / (double) good_matches.size();
-  }
+  } else {
+      dissimilarity = std::numeric_limits<double>::quiet_NaN();
+    }
 
   void HandleOKCallback() {
     Nan::HandleScope scope;
