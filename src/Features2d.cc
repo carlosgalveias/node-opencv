@@ -39,14 +39,14 @@ class AsyncDetectSimilarity: public Nan::AsyncWorker {
         std::vector < cv::KeyPoint > keypoints1;
         std::vector < cv::KeyPoint > keypoints2;
 
-        detector - > detect(image1, keypoints1);
-        detector - > detect(image2, keypoints2);
+        detector->detect(image1, keypoints1);
+        detector->detect(image2, keypoints2);
 
-        extractor - > compute(image1, keypoints1, descriptors1);
-        extractor - > compute(image2, keypoints2, descriptors2);
+        extractor->compute(image1, keypoints1, descriptors1);
+        extractor->compute(image2, keypoints2, descriptors2);
 
         if (descriptors1.type() == descriptors2.type() && descriptors1.cols == descriptors2.cols) {
-            matcher - > match(descriptors1, descriptors2, matches);
+            matcher-> match(descriptors1, descriptors2, matches);
             double max_dist = 0;
             double min_dist = 100;
             //-- Quick calculation of max and min distances between keypoints
@@ -92,7 +92,7 @@ class AsyncDetectSimilarity: public Nan::AsyncWorker {
         if (dissimilarity != dissimilarity) argv[1] = Nan::Null();
         else argv[1] = Nan::New < Number > (dissimilarity);
 
-        callback - > Call(2, argv);
+        callback->Call(2, argv);
     }
 
     private: cv::Mat image1;
@@ -105,8 +105,8 @@ NAN_METHOD(Features::Similarity) {
 
     REQ_FUN_ARG(2, cb);
 
-    cv::Mat image1 = Nan::ObjectWrap::Unwrap < Matrix > (info[0] - > ToObject()) - > mat;
-    cv::Mat image2 = Nan::ObjectWrap::Unwrap < Matrix > (info[1] - > ToObject()) - > mat;
+    cv::Mat image1 = Nan::ObjectWrap::Unwrap < Matrix > (info[0]->ToObject())->mat;
+    cv::Mat image2 = Nan::ObjectWrap::Unwrap < Matrix > (info[1]->ToObject())->mat;
 
     Nan::Callback * callback = new Nan::Callback(cb.As < Function > ());
 
