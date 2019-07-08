@@ -77,8 +77,11 @@ class AsyncDetectSimilarity: public Nan::AsyncWorker {
                     good_matches_sum += distance;
                 }
             }
-
-            dissimilarity = (double) good_matches_sum / (double) good_matches.size();
+            if (good_matches.size() > 0){
+                dissimilarity = (double) good_matches_sum / (double) good_matches.size();
+            } else {
+                dissimilarity = std::numeric_limits<double> ::quiet_NaN();
+            }
         } else {
             dissimilarity = std::numeric_limits<double> ::quiet_NaN();
         }
